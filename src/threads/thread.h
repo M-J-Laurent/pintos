@@ -93,6 +93,9 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /**< List element. */
 
+    /* made for project 1 */
+    int64_t wakeup_time;                /**< Time to wake up. */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
@@ -138,4 +141,12 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/*
+   added for project 1
+*/
+void thread_sleep(int64_t wake_up_tick);
+void thread_check_wakeup (int64_t curTicks);
+/*
+   end of added for project 1
+*/
 #endif /**< threads/thread.h */

@@ -28,6 +28,9 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* added for project 1 used for sleeping threads */
+static struct list sleeping_list;
+
 /** Idle thread. */
 static struct thread *idle_thread;
 
@@ -92,6 +95,8 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  /* added for project 1 */
+  list_init (&sleeping_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -481,6 +486,49 @@ alloc_frame (struct thread *t, size_t size)
   t->stack -= size;
   return t->stack;
 }
+// added for project 1 
+/* 
+    compares wakeup times of two threads
+*/
+static bool
+thread_wakeup_time_compare (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  struct thread *thread_a = list_entry (a, struct thread, elem);
+  struct thread *thread_b = list_entry (b, struct thread, elem);
+  return thread_a->wakeup_time < thread_b->wakeup_time;
+}
+
+/*
+handles sleep list inserts
+*/
+void
+thread_sleep(int64_t wake_up_tick){
+  enum intr_level old_level;
+  old_level = intr_disable ();// disable interrupts to avoid race
+
+  struct thread *cur = thread_current ();
+  cur->wakeup_time = wake_up_tick;
+  list_insert_ordered (&sleeping_list, &cur->elem, thread_wakeup_time_compare, NULL);
+  thread_block (); // release control of CPU to other threads
+
+  intr_set_level (old_level); // re-enable interrupts
+}
+
+/*
+checks and handles wakeup
+*/
+void
+thread_check_wakeup(int64_t curTicks){
+  while(!list_empty(&sleeping_list)){
+    struct thread* checkT = list_entry(list_front(&sleeping_list), struct thread, elem);//get thread with closest wakeup time
+
+    if (checkT->wakeup_time <= curTicks){//check if it needs to wakeup
+      list_pop_front(&sleeping_list);
+      thread_unblock(checkT);
+    }
+    else break;
+  }
+}
+// end of added for project 1
 
 /** Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
