@@ -31,6 +31,9 @@ static struct list all_list;
 /* added for project 1 used for sleeping threads task 1 */
 static struct list sleeping_list;
 
+/* added for project 1 used for donors in task 3*/
+static struct list donor_list;
+
 /** Idle thread. */
 static struct thread *idle_thread;
 
@@ -101,6 +104,8 @@ thread_init (void)
   list_init (&all_list);
   /* added for project 1 task 1*/
   list_init (&sleeping_list);
+  /* added for project 1 task 3*/
+  list_init (&donor_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -478,6 +483,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  //added for project 1 task 3
+  t->local_priority = priority;
+  t->donated_priority = 0;
+
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
