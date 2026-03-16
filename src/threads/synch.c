@@ -199,8 +199,20 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  //added in project 1 task 3
+  struct thread* cur=thread_current();
+  if (lock->holder != NULL){
+
+    enum intr_level old_level = intr_disable ();
+    cur->waiting_for_lock=lock; //sets waiting for lock
+    list_insert_ordered(&lock->holder->donor_list, &cur->donor_elem, thread_compare_donor_priority, NULL);
+    intr_set_level(old_level);
+
+    thread_propogate_donation(lock);
+  }
+  
   sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+  lock->holder = cur;
 }
 
 /** Tries to acquires LOCK and returns true if successful or false
@@ -233,7 +245,7 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-
+  thread_remove_lock_donations(lock);
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }
@@ -334,10 +346,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
+  if (!list_empty (&cond->waiters)){
     list_sort (&cond->waiters, compare_cond_priorities, NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /** Wakes up all threads, if any, waiting on COND (protected by

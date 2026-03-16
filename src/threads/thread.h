@@ -88,9 +88,13 @@ struct thread
     char name[16];                      /**< Name (for debugging purposes). */
     uint8_t *stack;                     /**< Saved stack pointer. */
     int priority;                       /**< Priority. */
+
     //project 1 task 3
     int local_priority;                 // priority given at creation and can be changed with set_priority()
-    int donated_priority;               // max priority given by lock waiters
+    struct list donor_list;             // donor list of threads waiting on our lock(s)
+    struct list_elem donor_elem;        // defines owner of downer position in list
+
+    struct lock* waiting_for_lock;      // current lock we are waiting on to be released
 
     struct list_elem allelem;           /**< List element for all threads list. */
 
@@ -154,6 +158,10 @@ void thread_check_wakeup (int64_t curTicks);
 // task 2
 bool thread_compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 void thread_check_preemption(void);
+
+bool thread_compare_donor_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_propogate_donation(struct lock* lock);
+void thread_remove_lock_donations(struct lock* lock);
 /*
    end of added for project 1
 */

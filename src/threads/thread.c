@@ -31,9 +31,6 @@ static struct list all_list;
 /* added for project 1 used for sleeping threads task 1 */
 static struct list sleeping_list;
 
-/* added for project 1 used for donors in task 3*/
-static struct list donor_list;
-
 /** Idle thread. */
 static struct thread *idle_thread;
 
@@ -104,8 +101,6 @@ thread_init (void)
   list_init (&all_list);
   /* added for project 1 task 1*/
   list_init (&sleeping_list);
-  /* added for project 1 task 3*/
-  list_init (&donor_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -485,7 +480,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   //added for project 1 task 3
   t->local_priority = priority;
-  t->donated_priority = 0;
+  list_init(&t->donor_list);
+  t->waiting_for_lock = NULL;
 
   t->magic = THREAD_MAGIC;
 
@@ -505,6 +501,61 @@ alloc_frame (struct thread *t, size_t size)
 
   t->stack -= size;
   return t->stack;
+}
+
+//added for project 1 task 3
+void
+thread_propogate_donation(struct lock* lock){
+  const int MAX_DEPTH=8;
+  int i=0;
+  enum intr_level old_level = intr_disable (); //disable interupt
+
+  
+  while (lock != NULL && i<MAX_DEPTH){//iteravely go up the chain of donors
+    struct thread* holder = lock->holder;
+    if (holder==NULL) break;
+    int effective_priority = holder->local_priority;
+
+    if (!list_empty(&holder->donor_list)){
+      struct thread* high_pri_donor=list_entry(list_front(&lock->holder->donor_list), struct thread, donor_elem);
+      if (high_pri_donor->priority>effective_priority){
+        effective_priority=high_pri_donor->priority;
+      }
+    }
+    if (holder->priority!= effective_priority){
+      holder->priority=effective_priority;
+      lock=lock->holder->waiting_for_lock;
+      i++;
+      continue;
+    }
+    break;
+  }
+  intr_set_level (old_level);
+  thread_check_preemption();
+  
+}
+
+void
+thread_remove_lock_donations(struct lock* lock){
+  struct thread* cur= thread_current();
+  struct list_elem* e=list_begin(&cur->donor_list);
+
+  while(e != list_end(&cur->donor_list)){
+    struct thread* thread_entry= list_entry(e, struct thread, donor_elem);
+    if(thread_entry->waiting_for_lock == lock){
+      e=list_remove(e);
+    }
+    else{
+      e=list_next(e);
+    }
+  }
+  thread_propogate_donation(lock);
+}
+bool
+thread_compare_donor_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+  struct thread *thread_a = list_entry (a, struct thread, donor_elem);
+  struct thread *thread_b = list_entry (b, struct thread, donor_elem);
+  return thread_a->priority > thread_b->priority;
 }
 
 // added for project 1 task 2
@@ -543,8 +594,6 @@ thread_check_preemption(void){
   }
   intr_set_level (old_level);
 }
-
-// end added for project 1 task 2
 
 // added for project 1 task 1
 /* 
@@ -589,7 +638,7 @@ thread_check_wakeup(int64_t curTicks){
     else break;
   }
 }
-// end of added for project 1 task 1
+// end of added for project 1
 
 /** Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
