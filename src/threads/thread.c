@@ -28,7 +28,7 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
-/* added for project 1 used for sleeping threads */
+/* added for project 1 used for sleeping threads task 1 */
 static struct list sleeping_list;
 
 /** Idle thread. */
@@ -74,6 +74,10 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+//project 1 task 2 func signature
+bool thread_compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_check_preemption(void);
+
 /** Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -95,7 +99,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-  /* added for project 1 */
+  /* added for project 1 task 1*/
   list_init (&sleeping_list);
 
   /* Set up a thread structure for the running thread. */
@@ -205,6 +209,8 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  //added for project 1 task 2
+  thread_check_preemption();
 
   return tid;
 }
@@ -242,8 +248,11 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  //changed for project 1 task 2
+  list_insert_ordered(&ready_list, &t->elem, thread_compare_priority, NULL);
   t->status = THREAD_READY;
+  // thread_check_preemption();
+
   intr_set_level (old_level);
 }
 
@@ -313,7 +322,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur->elem, thread_compare_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -341,6 +350,8 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  // added for project 1 task 2
+  thread_check_preemption();
 }
 
 /** Returns the current thread's priority. */
@@ -486,9 +497,49 @@ alloc_frame (struct thread *t, size_t size)
   t->stack -= size;
   return t->stack;
 }
-// added for project 1 
+
+// added for project 1 task 2
+/*
+  compares priority of two threads, makes a list in descending order of priority
+*/
+bool
+thread_compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+  struct thread *thread_a = list_entry (a, struct thread, elem);
+  struct thread *thread_b = list_entry (b, struct thread, elem);
+  return thread_a->priority > thread_b->priority;
+}
+
+void
+thread_check_preemption(void){
+  if (intr_context()){ // cannot yield normally if we are inside of an interupt handler
+    if (list_empty(&ready_list))return;
+
+    struct thread* head = list_entry(list_front(&ready_list), struct thread, elem);
+    if(thread_current()->priority < head->priority){
+      intr_yield_on_return();
+    }
+    return;
+  }
+
+  // if normal context
+  enum intr_level old_level = intr_disable ();
+  if (list_empty(&ready_list)){
+    intr_set_level (old_level);
+    return;
+  }
+
+  struct thread* head = list_entry(list_front(&ready_list), struct thread, elem);
+  if(thread_current()->priority < head->priority){
+    thread_yield();
+  }
+  intr_set_level (old_level);
+}
+
+// end added for project 1 task 2
+
+// added for project 1 task 1
 /* 
-    compares wakeup times of two threads
+    compares wakeup times of two threads, makes a list in ascending order of ticks
 */
 static bool
 thread_wakeup_time_compare (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
@@ -524,11 +575,12 @@ thread_check_wakeup(int64_t curTicks){
     if (checkT->wakeup_time <= curTicks){//check if it needs to wakeup
       list_pop_front(&sleeping_list);
       thread_unblock(checkT);
+      thread_check_preemption();
     }
     else break;
   }
 }
-// end of added for project 1
+// end of added for project 1 task 1
 
 /** Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is

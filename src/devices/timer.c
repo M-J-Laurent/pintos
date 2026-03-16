@@ -89,7 +89,7 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  // changed for project 1
+  // changed for project 1 task 1
   thread_sleep(timer_ticks() + ticks);
 }
 
@@ -169,7 +169,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-  /* added for project 1 */
+  /* added for project 1 task 1 */
   thread_check_wakeup(ticks);
 }
 

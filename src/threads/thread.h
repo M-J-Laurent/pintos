@@ -144,8 +144,12 @@ int thread_get_load_avg (void);
 /*
    added for project 1
 */
+//task 1
 void thread_sleep(int64_t wake_up_tick);
 void thread_check_wakeup (int64_t curTicks);
+// task 2
+bool thread_compare_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_check_preemption(void);
 /*
    end of added for project 1
 */
