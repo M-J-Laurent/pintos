@@ -349,8 +349,19 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  // added for project 1 task 2
+  // changed for project 1 task 4
+  if (new_priority < PRI_MIN || new_priority > PRI_MAX) return;
+  struct thread* cur=thread_current();
+  cur->local_priority = new_priority;
+  int effective_priority=cur->local_priority;
+  if (!list_empty(&cur->donor_list)){
+    struct thread* max_prio_donor=list_entry(list_front(&cur->donor_list), struct thread, donor_elem);
+    if (effective_priority < max_prio_donor->priority){
+      effective_priority=max_prio_donor->priority;
+    }
+  }
+  cur->priority=effective_priority;
+  thread_propogate_priority(cur->waiting_for_lock);
   thread_check_preemption();
 }
 
@@ -505,7 +516,7 @@ alloc_frame (struct thread *t, size_t size)
 
 //added for project 1 task 3
 void
-thread_propogate_donation(struct lock* lock){
+thread_propogate_priority(struct lock* lock){
   const int MAX_DEPTH=8;
   int i=0;
   enum intr_level old_level = intr_disable (); //disable interupt
@@ -515,6 +526,7 @@ thread_propogate_donation(struct lock* lock){
     struct thread* holder = lock->holder;
     if (holder==NULL) break;
     int effective_priority = holder->local_priority;
+    list_sort(&holder->donor_list, thread_compare_donor_priority, NULL);//priorities may have changed so we must sort
 
     if (!list_empty(&holder->donor_list)){
       struct thread* high_pri_donor=list_entry(list_front(&lock->holder->donor_list), struct thread, donor_elem);
@@ -523,6 +535,7 @@ thread_propogate_donation(struct lock* lock){
       }
     }
     if (holder->priority!= effective_priority){
+
       holder->priority=effective_priority;
       lock=lock->holder->waiting_for_lock;
       i++;
@@ -531,8 +544,6 @@ thread_propogate_donation(struct lock* lock){
     break;
   }
   intr_set_level (old_level);
-  thread_check_preemption();
-  
 }
 
 void
@@ -549,7 +560,7 @@ thread_remove_lock_donations(struct lock* lock){
       e=list_next(e);
     }
   }
-  thread_propogate_donation(lock);
+  thread_propogate_priority(lock);
 }
 bool
 thread_compare_donor_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){

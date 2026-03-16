@@ -113,9 +113,12 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
+  //changed for preemption to work project 1 task 2 and 3
+  if (!list_empty (&sema->waiters)){
+    list_sort(&sema->waiters, thread_compare_priority, NULL);//needed in case the waiting list has changed
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
+  }
   sema->value++;
   // added for project 1 task 2
   thread_check_preemption();
@@ -208,11 +211,28 @@ lock_acquire (struct lock *lock)
     list_insert_ordered(&lock->holder->donor_list, &cur->donor_elem, thread_compare_donor_priority, NULL);
     intr_set_level(old_level);
 
-    thread_propogate_donation(lock);
+    thread_propogate_priority(lock);
   }
   
   sema_down (&lock->semaphore);
   lock->holder = cur;
+  //added in project 1 task 3
+  cur->waiting_for_lock=NULL; //need to reset as we have aquired the lock we were waiting for
+
+  
+  enum intr_level old_level = intr_disable ();
+  //add all of the waiting threads into the currently active donor list
+  struct list_elem* waiter_elem = list_begin(&lock->semaphore.waiters);
+  while(waiter_elem != list_end(&lock->semaphore.waiters)){
+    
+    struct thread* donor = list_entry(waiter_elem,struct thread, elem);
+    ASSERT (donor->waiting_for_lock==lock);
+    list_insert_ordered(&cur->donor_list, &donor->donor_elem, thread_compare_donor_priority, NULL);
+    waiter_elem=list_next(waiter_elem);
+  }
+  thread_propogate_priority(lock);
+
+  intr_set_level(old_level);
 }
 
 /** Tries to acquires LOCK and returns true if successful or false

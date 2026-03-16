@@ -96,6 +96,7 @@ struct thread
 
     struct lock* waiting_for_lock;      // current lock we are waiting on to be released
 
+
     struct list_elem allelem;           /**< List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -160,7 +161,7 @@ bool thread_compare_priority(const struct list_elem *a, const struct list_elem *
 void thread_check_preemption(void);
 
 bool thread_compare_donor_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-void thread_propogate_donation(struct lock* lock);
+void thread_propogate_priority(struct lock* lock);
 void thread_remove_lock_donations(struct lock* lock);
 /*
    end of added for project 1
