@@ -85,7 +85,7 @@ struct thread
     /* Owned by thread.c. */
     tid_t tid;                          /**< Thread identifier. */
     enum thread_status status;          /**< Thread state. */
-    char name[16];                      /**< Name (for debugging purposes). */
+    char name[16];                      /**< usage changed for task 1 project 2 */
     uint8_t *stack;                     /**< Saved stack pointer. */
     int priority;                       /**< Priority. */
 
@@ -108,6 +108,8 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
+
+    int exit_status;                    /**< project 2 task 1 used for storing exit status: -1 kernel exit, 0 successful exit, 1 failed exit */ 
 #endif
 
     /* Owned by thread.c. */

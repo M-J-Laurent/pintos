@@ -212,6 +212,7 @@ thread_create (const char *name, int priority,
   //added for project 1 task 2
   thread_check_preemption();
 
+
   return tid;
 }
 
@@ -493,6 +494,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->local_priority = priority;
   list_init(&t->donor_list);
   t->waiting_for_lock = NULL;
+
+  // added for project 2 task 1
+#ifdef USERPROG
+    t->pagedir = NULL;  //default is kernel thread(null)
+    t->exit_status = -1; // initialize exit status to -1 for kernel exit
+#endif
 
   t->magic = THREAD_MAGIC;
 

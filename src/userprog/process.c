@@ -37,9 +37,15 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  //added for project 2 task 1
+  char* file_name_copy, *token, *save_ptr;
+  file_name_copy = palloc_get_page (0);
+  strlcpy (file_name_copy, file_name, 16);
+  token = strtok_r(file_name_copy, " ", &save_ptr); // token now contains the file name without arguments
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  /* Create a new thread to execute FILE_NAME. */  
+  tid = thread_create (token, PRI_DEFAULT, start_process, fn_copy);
+  palloc_free_page(file_name_copy); // part of project 2 task 1: free the page allocated for file_name_copy after extracting the file name from it
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -98,11 +104,18 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
   if (pd != NULL) 
     {
+
+      //Project 2 task 1: 
+      //want to ensure this is within pd!=NULL because we only want to print if exit status is not kernel exit and if pd==NULL then we know it is a kernel exit
+      printf("%s: exit(%d)\n", cur->name, cur->exit_status); // print the exit status of the process before exiting
+
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
