@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /** States in a thread's life cycle. */
 enum thread_status
@@ -108,8 +109,11 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /**< Page directory. */
-
     int exit_status;                    /**< project 2 task 1 used for storing exit status: -1 kernel exit, 0 successful exit, 1 failed exit */ 
+    struct semaphore exit_sema;          /**< Semaphore for child to signal parent it has exited */
+    struct semaphore read_sema;        /**< Semaphore for parent to signal child it has read the exit status so that the child can continue exiting */
+    bool waited_by_parent;                  /**< Flag to indicate if the parent is waiting on this thread */
+    
 #endif
 
     /* Owned by thread.c. */
@@ -147,6 +151,7 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+struct thread *thread_get_by_tid (tid_t tid);
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);

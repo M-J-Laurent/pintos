@@ -366,6 +366,20 @@ thread_set_priority (int new_priority)
   thread_check_preemption();
 }
 
+//project 2: added helper function to get thread by tid
+struct thread *
+thread_get_by_tid (tid_t tid)
+{
+  struct list_elem *e;
+  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (t->tid == tid)
+        return t;
+    }
+  return NULL;
+}
+
 /** Returns the current thread's priority. */
 int
 thread_get_priority (void) 
@@ -499,6 +513,9 @@ init_thread (struct thread *t, const char *name, int priority)
 #ifdef USERPROG
     t->pagedir = NULL;  //default is kernel thread(null)
     t->exit_status = -1; // initialize exit status to -1 for kernel exit
+    sema_init (&t->exit_sema, 0);
+    sema_init (&t->read_sema, 0);
+    t->waited_by_parent = false;
 #endif
 
   t->magic = THREAD_MAGIC;

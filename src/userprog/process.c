@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -37,6 +38,7 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+
   //added for project 2 task 1
   char* file_name_copy, *token, *save_ptr;
   file_name_copy = palloc_get_page (0);
@@ -94,7 +96,13 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct thread *child = thread_get_by_tid(child_tid); // get the thread struct for the child thread with the given tid
+  if (child == NULL || child->waited_by_parent) return -1;
+  child->waited_by_parent = true;
+  sema_down (&child->exit_sema); // wait for the child to exit by downing its exit_sema
+  int status = child->exit_status;//save status before upsema so that we can return it after upsema which may realease the child thread
+  sema_up (&child->read_sema); // signal the child that we have read its exit status so that it can continue exiting if it was waiting on this
+  return status;
 }
 
 /** Free the current process's resources. */
@@ -115,7 +123,6 @@ process_exit (void)
       //Project 2 task 1: 
       //want to ensure this is within pd!=NULL because we only want to print if exit status is not kernel exit and if pd==NULL then we know it is a kernel exit
       printf("%s: exit(%d)\n", cur->name, cur->exit_status); // print the exit status of the process before exiting
-
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -127,6 +134,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+  sema_up (&cur->exit_sema); // signal the parent that we have exited by upping our exit_sema
+  sema_down (&cur->read_sema); // wait for the parent to read our exit status before we can continue exiting and free our resources if we were waiting on this
 }
 
 /** Sets up the CPU for running user code in the current
@@ -217,21 +226,22 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 //project 2 task 1: setup the stack with command line arguments so that we can access them after the process is loaded and running
 static void
-setup_argv_stack(char *file_name, void **esp) {
+setup_argv_stack(const char *file_name, void **esp) {
   char* argv[64]; // array to hold pointers to arguments, max 64 arguments
   int argc = 0; // argument count
-  char* token, *save_ptr;
+  char *token, copy[256], *save_ptr;
+
+  strlcpy (copy, file_name, sizeof copy);//copy file_name to a local buffer so that we can tokenize it without modifying the original file_name
 
   //tokenize the command line(file_name)
-  for (token = strtok_r(file_name, " ", &save_ptr);
-      token != NULL;
+  for (token = strtok_r(copy, " ", &save_ptr);
+      token != NULL && argc < 64; // stop if we reach the end of the command line or if we exceed the max number of arguments
       token = strtok_r(NULL, " ", &save_ptr)) {
-    ASSERT(argc < 64); // ensure we don't exceed the maximum number of arguments
-
+    
     size_t token_len = strlen(token) + 1; // length of the argument including null terminator
     *esp -= token_len; // move stack pointer down by the length of the argument
     memcpy(*esp, token, token_len); // copy the argument onto the stack
-    argv[argc++] = token; // store pointer to argument in argv and increment argc
+    argv[argc++] = *esp; // store pointer to argument in argv and increment argc
   }
 
   *esp = (void *)((uintptr_t) *esp & ~0x3); // word-align the stack pointer
@@ -274,14 +284,24 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-  /* Open executable file. */
-  file = filesys_open (file_name);
-  if (file == NULL) 
-    {
-      printf ("load: %s: open failed\n", file_name);
-      goto done; 
-    }
 
+  //modified for project 2 task 1: extract the file name from the command line to open the executable file
+  char *fn_parse, *save_ptr, *prog_name;
+  fn_parse = palloc_get_page (0);
+  if (fn_parse == NULL)
+    goto done;
+  strlcpy (fn_parse, file_name, PGSIZE);
+  prog_name = strtok_r (fn_parse, " ", &save_ptr); //the first token is the program name
+
+  file = filesys_open (prog_name);
+  if (file == NULL)
+    printf ("load: %s: open failed\n", prog_name);
+
+  palloc_free_page (fn_parse);
+  if (file == NULL){
+    goto done;
+  }
+  
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -360,7 +380,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   //project 2 task 1: setup the stack with command line arguments on stack
   setup_argv_stack(file_name, esp);
-  
+
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
