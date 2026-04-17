@@ -214,6 +214,46 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
 
+
+//project 2 task 1: setup the stack with command line arguments so that we can access them after the process is loaded and running
+static void
+setup_argv_stack(char *file_name, void **esp) {
+  char* argv[64]; // array to hold pointers to arguments, max 64 arguments
+  int argc = 0; // argument count
+  char* token, *save_ptr;
+
+  //tokenize the command line(file_name)
+  for (token = strtok_r(file_name, " ", &save_ptr);
+      token != NULL;
+      token = strtok_r(NULL, " ", &save_ptr)) {
+    ASSERT(argc < 64); // ensure we don't exceed the maximum number of arguments
+
+    size_t token_len = strlen(token) + 1; // length of the argument including null terminator
+    *esp -= token_len; // move stack pointer down by the length of the argument
+    memcpy(*esp, token, token_len); // copy the argument onto the stack
+    argv[argc++] = token; // store pointer to argument in argv and increment argc
+  }
+
+  *esp = (void *)((uintptr_t) *esp & ~0x3); // word-align the stack pointer
+
+  *esp -= sizeof(char *); // space for null pointer sentinel
+  *(char **)(*esp) = NULL; // null pointer sentinel
+
+  for (int i = argc - 1; i >= 0; i--) { // push pointers to arguments onto the stack in reverse order
+    *esp -= sizeof(char *); // space for pointer to argument
+    *(char **)(*esp) = argv[i]; // push pointer to argument onto the stack
+  }
+
+  char **argv_ptr = *esp; // save pointer to the first argument (argv[0])
+  *esp -= sizeof(char **); // space for argv pointer
+  *(char ***)(*esp) = argv_ptr; // push argv pointer onto the stack
+
+  *esp -= sizeof(int); // space for argc
+  *(int *)(*esp) = argc; // push argc onto the stack
+
+  *esp -= sizeof(void *); // space for fake return address
+  *(void **)(*esp) = NULL; // push fake return address (NULL)
+}
 /** Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
@@ -318,6 +358,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp))
     goto done;
 
+  //project 2 task 1: setup the stack with command line arguments on stack
+  setup_argv_stack(file_name, esp);
+  
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
